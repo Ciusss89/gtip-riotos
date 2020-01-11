@@ -1,0 +1,23 @@
+# HW FEATURE
+
+# Setup for the eth transciever enc28j60:
+
+USEMODULE += enc28j60
+ifneq (, $(filter enc28j60, $(USEMODULE)))
+
+    # avoid multiple definitions when package depenedencies are resolved recursively
+    ifndef ENC28J60_PARAM_DEFINED
+        export ENC28J60_PARAM_DEFINED = 1
+
+        # default definitions
+        ENC28J60_PARAM_SPI ?= SPI_DEV\(0\)
+        ENC28J60_PARAM_RESET ?= GPIO_PIN\(PORT_A,8\)
+        ENC28J60_PARAM_CS ?= GPIO_PIN\(PORT_B,5\)
+        ENC28J60_PARAM_INT ?= GPIO_PIN\(PORT_A,10\)
+
+        CFLAGS += -DENC28J60_PARAM_SPI=$(ENC28J60_PARAM_SPI)
+        CFLAGS += -DENC28J60_PARAM_CS=$(ENC28J60_PARAM_CS)
+        CFLAGS += -DENC28J60_PARAM_INT=$(ENC28J60_PARAM_INT)
+        CFLAGS += -DENC28J60_PARAM_RESET=$(ENC28J60_PARAM_RESET)
+    endif
+endif
