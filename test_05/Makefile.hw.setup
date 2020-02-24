@@ -1,0 +1,41 @@
+# HW FEATURE
+
+# Setup for the eth transciever nrf24l01p:
+
+USEMODULE += nrf24l01p
+USEMODULE += nrf24l01p_advanced
+ifneq (, $(filter nrf24l01p, $(USEMODULE)))
+
+    # avoid multiple definitions when package depenedencies are resolved recursively
+    ifndef NRF24L01P_PARAM_DEFINED
+        export NRF24L01P_PARAM_DEFINED  = 1
+
+        #  definitions
+        SPI_PORT ?= SPI_DEV\(0\)
+        CE_PIN ?= GPIO_PIN\(PORT_A,8\)
+        CS_PIN ?= GPIO_PIN\(PORT_B,5\)
+        IRQ_PIN ?= GPIO_PIN\(PORT_A,10\)
+
+        ADDR_P0 ?= \{0x01,0x02,0x03,0x04,0x05\}
+        ADDR_P1 ?= \{0xFF,0xFF,0xFF,0xFF,0xFF\}
+        ADDR_P2 ?= 0x00
+        ADDR_P3 ?= 0x01
+        ADDR_P4 ?= 0x02
+        ADDR_P5 ?= 0x03
+
+        PROTOCOL ?= NRF24L01P_ENHANCED_SHOCKBURST
+
+        CFLAGS += -DNRF24L01P_PARAM_SPI=$(SPI_PORT)
+        CFLAGS += -DNRF24L01P_PARAM_PIN_CE=$(CE_PIN)
+        CFLAGS += -DNRF24L01P_PARAM_PIN_CS=$(CS_PIN)
+        CFLAGS += -DNRF24L01P_PARAM_PIN_IRQ=$(IRQ_PIN)
+
+        CFLAGS += -DNRF24L01P_PARAM_RX_P0_ADDR=$(ADDR_P0)
+        CFLAGS += -DNRF24L01P_PARAM_RX_P1_ADDR=$(ADDR_P1)
+        CFLAGS += -DNRF24L01P_PARAM_RX_P2_ADDR=$(ADDR_P2)
+        CFLAGS += -DNRF24L01P_PARAM_RX_P3_ADDR=$(ADDR_P3)
+        CFLAGS += -DNRF24L01P_PARAM_RX_P4_ADDR=$(ADDR_P4)
+        CFLAGS += -DNRF24L01P_PARAM_RX_P5_ADDR=$(ADDR_P5)
+        CFLAGS += -DNRF24L01P_PARAM_PROTOCOL=$(PROTOCOL)
+    endif
+endif
