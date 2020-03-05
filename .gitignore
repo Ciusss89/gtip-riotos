@@ -1,0 +1,12 @@
+# Object files
+./test*/*.o
+# Built binaries
+./test_*/*bin
+# Build directory
+./test_*/*bin
+# Backup files
+./test_*/*~
+./test_*/*.orig
+./test_*/*.swp
+# GDB initialization scripts
+./test_*/.gdbinit
