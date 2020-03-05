@@ -4,7 +4,7 @@ In this example, I want to interface my Nucleo-64 board to 2.4GHz Wireless
 transceiver. I looked for one transceiver widely used and cheap.
 
 I find with the [nfr24l01p](./media/nRF24L01.pdf) a perfect match, riot-os supports it in a low-level
-way but there's a PR to add it to GNRC (generic network stack) and this is a
+way but there's a [PR](https://github.com/RIOT-OS/RIOT/pull/12681) to add it to GNRC (generic network stack) and this is a
 great thing.
 
 Thanks to GNR we can use many cool feature of RioT OS
