@@ -2,6 +2,7 @@
  * Author:	Giuseppe Tipaldi
  * Created:	2020
  **/
+#define _GNU_SOURCE
 
 #include <string.h>
 #include <stdlib.h>
@@ -9,30 +10,37 @@
 #include <inttypes.h>
 #include <string.h>
 
+/* RIOT APIs */
 #include "shell.h"
 #include "board.h"
 #include "thread.h"
 
+/* RIOT APIs */
 #include "periph/gpio.h"
 
+/* RIOT CAN APIs */
 #include "can/can.h"
 #include "can/conn/raw.h"
 #include "can/conn/isotp.h"
 #include "can/device.h"
 
-#define ENABLE_DEBUG    (1)
+#define ENABLE_DEBUG    (0)
 #include "debug.h"
 
 #include "ihbcan.h"
+
+char notify_node_stack[THREAD_STACKSIZE_MEDIUM];
+static int8_t pid_notify_node = -1;
 
 struct ihb_can_perph *p;
 
 static void _usage(void)
 {
 	puts("IHBCAN userspace");
-	puts("\tihbcan list   - show can controller struct");
-	puts("\tihbcan canON  - turn on can controller");
-	puts("\tihbcan canOFF - turn off can controller");
+	puts("\tihbcan list      - show CAN controller struct");
+	puts("\tihbcan canON     - turn on can controller");
+	puts("\tihbcan canOFF    - turn off can controller");
+	puts("\tihbcan notifyOFF - teardown pid_notify_node");
 }
 
 static int  _scan_for_controller(struct ihb_can_perph *device)
@@ -42,7 +50,7 @@ static int  _scan_for_controller(struct ihb_can_perph *device)
 	if (raw_can && strlen(raw_can) < CAN_NAME_LEN) {
 		device->id = CAN_C;
 		strcpy(device->name, raw_can);
-		DEBUG("_scan_for_controller: CAN #%d, name=%s\n", device->id,
+		DEBUG("[D] _scan_for_controller: CAN #%d, name=%s\n", device->id,
 								  device->name);
 		return 0;
 	}
@@ -55,17 +63,17 @@ static uint8_t _power_up(uint8_t ifnum)
 	uint8_t ret;
 
 	if (ifnum >= CAN_DLL_NUMOF) {
-		puts("Invalid interface number");
+		puts("[E] Invalid interface number");
 		return 1;
 	}
 
 	ret = raw_can_power_up(ifnum);
 	if (ret != 0) {
-		printf("Error when powering up: res=-%d\n", ret);
+		printf("[E] Error when powering up: res=-%d\n", ret);
 		return 1;
 	}
 
-	return ret;
+	return 0;
 }
 
 static uint8_t _power_down(uint8_t ifnum)
@@ -73,18 +81,70 @@ static uint8_t _power_down(uint8_t ifnum)
 
 	uint8_t ret = 0;
 	if (ifnum >= CAN_DLL_NUMOF) {
-		puts("Invalid interface number");
+		puts("[E] Invalid interface number");
 		return 1;
 	}
 
 	ret = raw_can_power_down(ifnum);
 	if (ret != 0) {
-		printf("Error when powering up: res=-%d\n", ret);
+		printf("[E] Error when powering up: res=-%d\n", ret);
 		return 1;
 	}
 
-	return ret;
+	return 0;
 }
+
+static void *_thread_notify_node(void *device)
+{
+
+	struct ihb_can_perph *d = (struct ihb_can_perph *)device;
+	struct can_frame frame;
+	conn_can_raw_t conn;
+	int r;
+
+	d->status_notify_node = true;
+
+	frame.can_id = d->frame_id;
+	frame.can_dlc = 8;
+
+	/* Send Magic _IHB_V.3_ */
+	frame.data[0] = 0x5F;
+	frame.data[1] = 0x49;
+	frame.data[2] = 0x48;
+	frame.data[3] = 0x42;
+	frame.data[4] = 0x5F;
+	frame.data[5] = 0x56;
+	frame.data[6] = 0x33;
+	frame.data[7] = 0x5F;
+
+	r = conn_can_raw_create(&conn, NULL, 0, d->id, 0);
+	if (r < 0) {
+		printf("[E] _notify_node: error creating the CAN connection socket: %d", r);
+		return NULL;
+	}
+
+	do {
+		r = conn_can_raw_send(&conn, &frame, 0);
+
+		if (r < 0) {
+			printf("[E] _notify_node: error sending the CAN frame: %d", r);
+			goto sock_close;
+		}
+
+		/* Notify the frame MAGIC each 1000ms */
+		xtimer_usleep(WAIT_1000ms);
+
+	} while (r == 0 && d->status_notify_node);
+
+sock_close:
+	r = conn_can_raw_close(&conn);
+	if (r < 0)
+		printf("[E] _notify_node: error closing the CAN connection socket: %d", r);
+
+	puts("_notify_node has been termined");
+	return NULL;
+}
+
 
 int _ihb_can_handler(int argc, char **argv)
 {
@@ -93,13 +153,17 @@ int _ihb_can_handler(int argc, char **argv)
 		_usage();
 		return 1;
 	} else if (strncmp(argv[1], "list", 5) == 0) {
-		printf("ihb dev=%d name=%s mcu_id=%s\n", p->id,
-							 p->name,
-							 p->controller_uid);
+		printf("ihb dev=%d name=%s mcu_id=%s, frame_id=%d\n", p->id,
+							   p->name,
+							   p->controller_uid,
+							   p->frame_id);
 	} else if (strncmp(argv[1], "canON", 6) == 0) {
 		return _power_up(p->id);
 	} else if (strncmp(argv[1], "canOFF", 7) == 0) {
 		return _power_down(p->id);
+	} else if (strncmp(argv[1], "notifyOFF", 10) == 0) {
+		p->status_notify_node = false;
+		printf("ihb: terminate %d", pid_notify_node);
 	} else {
 		printf("unknown command: %s\n", argv[1]);
 		return 1;
@@ -110,21 +174,22 @@ int _ihb_can_handler(int argc, char **argv)
 
 int _can_init(struct ihb_can_perph *device)
 {
-	device = malloc(sizeof(struct ihb_can_perph));
+	device = xmalloc(sizeof(struct ihb_can_perph));
 	uint8_t unique_id[CPUID_LEN];
 	uint8_t r = 1;
 	char *b;
 
 	if(CAN_DLL_NUMOF == 0)
-		puts("no can controller avaible");
+		puts("[E] no CAN controller avaible");
 	else
 		DEBUG("MCU has %d can controller\n", CAN_DLL_NUMOF);
 
 	if(CPUID_LEN > MAX_CPUID_LEN) {
-		puts("_can_init CPUID_LEN > MAX_CPUID_LEN");
+		puts("[E] _can_init CPUID_LEN > MAX_CPUID_LEN");
 		return 1;
 	}
 
+	/* Get the Unique identifier from the MCU */
 	cpuid_get(unique_id);
 	if(ENABLE_DEBUG) {
 		printf("Unique ID: 0x");
@@ -133,21 +198,34 @@ int _can_init(struct ihb_can_perph *device)
 		puts("");
 	}
 
+	b = xmalloc(CPUID_LEN * 2 + 1);
 	b = data2str(unique_id, CPUID_LEN);
 	
 	/* Save the MCU unique ID */
 	strcpy(device->controller_uid, b);
+	free(b);
 
 	/*
 	 * Generate an Unique CAN ID from the MCU's unique ID
 	 * the fletcher8 hash function returns a not null value
 	 */
-	p->can_id = fletcher8(unique_id, CPUID_LEN);
-	DEBUG("CAN ID=%02x\n", p->can_id);
+	device->frame_id = fletcher8(unique_id, CPUID_LEN);
+	DEBUG("CAN ID=%d\n", device->frame_id);
 
 	r = _scan_for_controller(device);
 	if(r != 0) {
-		puts("_scan_for_controller: has failed");
+		puts("[E] _can_init: _scan_for_controller: has failed");
+		return 1;
+	}
+
+	pid_notify_node = thread_create(notify_node_stack,
+					sizeof(notify_node_stack),
+					THREAD_PRIORITY_MAIN - 1,
+					THREAD_CREATE_WOUT_YIELD,
+					_thread_notify_node, (void*)device,
+					"ihb notify node");
+	if(pid_notify_node < KERNEL_PID_UNDEF) {
+		puts("[E] _can_init: cannot create thread notify node");
 		return 1;
 	}
 
@@ -165,5 +243,6 @@ int _can_init(struct ihb_can_perph *device)
 	 * */
 
 	p = device;
-	return r;
+	puts("ihb: init of the CAN subumodule success");
+	return 0;
 }

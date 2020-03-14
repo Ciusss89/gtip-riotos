@@ -3,10 +3,8 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "ihbcan.h"
-
 uint8_t fletcher8(const unsigned char * data, size_t n)
-{
+{	
 	uint8_t sum = 0xff, sumB = 0xff;
 	unsigned char tlen;
 

@@ -9,6 +9,8 @@
 
 #define IHB_THREAD_HELP "ihb - can submodule, development branch"
 
+#define WAIT_1000ms	(1000LU * US_PER_MS)	/* delay of 1 s */
+
 /*
  * MCU can have one or more CAN controllers, by default I use the
  * CAN controlller 0
@@ -27,8 +29,26 @@ struct ihb_can_perph {
 	/* Device Identifier Number: number of can the controllers of the mcu */
 	uint8_t id;
 
-	/* CAN ID */
-	uint8_t can_id;
+	/* CAN frame ID */
+	uint8_t frame_id;
+
+	bool status_notify_node;
+};
+
+enum ihb_states
+{
+	IHB_IDLE,
+	IHB_NOTIFY,
+	IHB_READY,
+	IHB_SCAN,
+	IHB_BUSY,
+	IHB_RISEVATE,
+	IHB_RISERVATE1,
+	IHN_RISERVATE2,
+	IHB_RISERVATE3,
+	IHB_RISERVATE4,
+	IHB_ERR,
+	IHB_MAX_STATES
 };
 
 
