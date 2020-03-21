@@ -1,4 +1,4 @@
-
+#define _GNU_SOURCE
 #include <stdbool.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -23,6 +23,7 @@
 #include <linux/can/raw.h>
 
 #include "ihb.h"
+#include "lib.h"
 
 static struct ihb_node *find_canID(int can_id) {
 	struct ihb_node *s;
@@ -31,9 +32,77 @@ static struct ihb_node *find_canID(int can_id) {
 	return s;
 }
 
-int discovery(int fd, bool v, uint8_t *wanna_be_master, uint8_t *ihb_nodes)
+int ihb_setup(int s, uint8_t c_id_master, bool v)
 {
-	struct timeval timeout_config = { 30, 0 };
+	struct canfd_frame frame;
+	struct ihb_node *ihb;
+
+	int r = -1, required_mtu = -1;
+	char *cmd;
+
+	for(ihb = ihbs; ihb != NULL; ihb = (struct ihb_node *)(ihb->hh.next)) {
+		fprintf(stdout, "configuring IHB node=%02x\n", ihb->canID);
+
+		if(ihb->canID == c_id_master & !ihb->expired) {
+			/* Set IHB as master  */
+			if(v)
+				fprintf(stdout, "\t configuring as MASTER\n");
+
+			r = asprintf(&cmd, "%03x#FFFF", ihb->canID);
+			if (r < 0) {
+				fprintf(stderr, "ihb_setup: asprintf fails");
+				break;
+			}
+
+			/*
+			 * Parse CAN frame
+			 *
+			 * Transfers a valid ASCII string describing a CAN frame
+			 * into struct canfd_frame
+			 */
+			required_mtu = parse_canframe(cmd, &frame);
+
+			/* send frame */
+			if (write(s, &frame, required_mtu) != required_mtu) {
+				r = -1;
+				break;
+			}
+
+			ihb->best = true;
+
+			free(cmd);
+
+		} else {
+			/* Set IHBs to idle mode */
+			if(v)
+				fprintf(stdout, "\t configuring in IDLE \n");
+
+			r = asprintf(&cmd, "%03x#2222",ihb->canID);
+			if (r < 0) {
+				fprintf(stderr, "ihb_setup: asprintf fails");
+				break;
+			}
+
+			/* parse CAN frame */
+			required_mtu = parse_canframe(cmd, &frame);
+
+			/* send frame */
+			if (write(s, &frame, required_mtu) != required_mtu) {
+				r = -1;
+				break;
+			}
+
+			ihb->best = false;
+		}
+	}
+
+	return r;
+}
+
+
+int ihb_discovery(int fd, bool v, uint8_t *wanna_be_master, uint8_t *ihb_nodes)
+{
+	struct timeval timeout_config = { 10, 0 };
 	struct can_frame frame_rd;
 	struct ihb_node *ihb;
 	ssize_t recv_bytes = 0;
@@ -89,6 +158,7 @@ int discovery(int fd, bool v, uint8_t *wanna_be_master, uint8_t *ihb_nodes)
 						return -1;
 					}
 
+					ihb->expired = false;
 					ihb->canID = frame_rd.can_id;
 					ihb->canP = NULL; /* not used for now */
 
@@ -115,7 +185,7 @@ int discovery(int fd, bool v, uint8_t *wanna_be_master, uint8_t *ihb_nodes)
 	return 0;
 }
 
-int init_socket_can(int *can_soc_fd, const char *d)
+int ihb_init_socket_can(int *can_soc_fd, const char *d)
 {
 	struct sockaddr_can addr;
 	struct ifreq ifr;

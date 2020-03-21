@@ -89,17 +89,26 @@ int main(int argc, char **argv)
 	}
 
 	/* Open and inizializate the socket CAN */
-	r = init_socket_can(&can_soc_fd, perph);
+	r = ihb_init_socket_can(&can_soc_fd, perph);
 	if (r < 0)
 		goto err_init;
 
 	/* Start discovery of the nodes */
-	r = discovery(can_soc_fd, verbose, &master_id, &ihb_nodes);
+	r = ihb_discovery(can_soc_fd, verbose, &master_id, &ihb_nodes);
 	if (r < 0)
 		goto  err_discovery;
 
-	fprintf(stdout, "Network size %d. IHB master candidate = %02x\n",
-			ihb_nodes, master_id);
+	if(ihb_nodes != 0)
+		fprintf(stdout, "Network size %d. IHB master candidate = %02x\n",
+				ihb_nodes, master_id);
+
+	/* Start the setup of the nodes */
+	//struct canfd_frame frame;
+	//int required_mtu;
+	//required_mtu = parse_canframe(perph, &frame);
+	r = ihb_setup(can_soc_fd, master_id, verbose);
+	if (r < 0)
+		goto  err_setup;
 
 	/*
 	 * NEXT STEP,
@@ -109,6 +118,7 @@ int main(int argc, char **argv)
 	 *
 	 * */
 
+err_setup:
 	HASH_CLEAR(hh,ihbs);
 
 err_discovery:
