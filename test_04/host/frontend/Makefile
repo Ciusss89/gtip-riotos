@@ -16,11 +16,12 @@ CFLAGS ?= -g -O2 -Wall -Wno-parentheses -Werror -Wvla
 
 LIBS ?=
 
-EXTRA_CFLAGS += -D IHB_VERSION="\"$(VERSION)\""
+EXTRA_CFLAGS += \
+		-Iinclude \
+		-D IHB_VERSION="\"$(VERSION)\""
 
-
-DEPS = ihb.h
-OBJ = main.o ihblib.o
+DEPS = ihb.h lib.h
+OBJ = main.o ihblib.o lib.o
 
 %.o: %.c $(DEPS)
 	$(CC) -c -o $@ $< $(CFLAGS) $(EXTRA_CFLAGS) $(LIBS)
