@@ -1,17 +1,34 @@
-CC=cc
-CFLAGS := -O2 -Wall -Wno-parentheses
-CPPFLAGS += \
-	    -I./include \
-	    -D_GNU_SOURCE
+# The IHB tool is a utility to interface with Network of IHB modules
+#
+# Authors:
+#	Copyright (C) 2020 Giuseppe Tipaldi <ing.giuseppe.tipaldi@gmail.com>
+
+MAKEFLAGS += --no-print-directory
+
+VERSION = 0.1.dev
+
+DESTDIR ?=
+PREFIX ?= /usr/local
+
+CC ?= gcc
+
+CFLAGS ?= -g -O2 -Wall -Wno-parentheses -Werror -Wvla
+
+LIBS ?=
+
+EXTRA_CFLAGS += -D IHB_VERSION="\"$(VERSION)\""
+
 
 DEPS = ihb.h
 OBJ = main.o ihblib.o
 
 %.o: %.c $(DEPS)
-	$(CC) -c -o $@ $< $(CFLAGS)
+	$(CC) -c -o $@ $< $(CFLAGS) $(EXTRA_CFLAGS) $(LIBS)
 
 ihbtool: $(OBJ)
 	$(CC) -o $@ $^ $(CFLAGS)
+
+all: ihbtool
 
 .PHONY: clean
 
@@ -20,4 +37,4 @@ clean:
 
 install:
 	mkdir -p $(DESTDIR)$(PREFIX)/bin
-	cp -f ihb $(DESTDIR)$(PREFIX)/bin
+	cp -f ihbtool $(DESTDIR)$(PREFIX)/bin

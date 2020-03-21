@@ -2,7 +2,7 @@
 #define IHB_H
 
 #include <stdint.h>
-#include <stdbool.h> 
+#include <stdbool.h>
 
 #include "uthash.h"
 
@@ -19,11 +19,6 @@ struct ihb_node {
 };
 
 static struct ihb_node *ihbs = NULL;
-
-/*
- *
- */
-void wipe_ihb_node();
 
 /*
  *
