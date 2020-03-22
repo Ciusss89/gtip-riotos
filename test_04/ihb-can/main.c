@@ -98,40 +98,51 @@ static void *_thread_notify_node(void *device)
 {
 
 	struct ihb_can_perph *d = (struct ihb_can_perph *)device;
-	struct can_frame frame;
+	struct can_frame *frame = xmalloc(sizeof(struct can_frame));
 	conn_can_raw_t conn;
 	int r;
 
 	d->status_notify_node = true;
 
-	frame.can_id = d->frame_id;
-	frame.can_dlc = 8;
+	frame->can_id = d->frame_id;
+	frame->can_dlc = 8;
 
-	/* Send Magic _IHB_V.3_ */
-	frame.data[0] = 0x5F;
-	frame.data[1] = 0x49;
-	frame.data[2] = 0x48;
-	frame.data[3] = 0x42;
-	frame.data[4] = 0x5F;
-	frame.data[5] = 0x56;
-	frame.data[6] = 0x33;
-	frame.data[7] = 0x5F;
+	/*
+	 * Send IHB's asci magic string "_IHB_V.3_"
+	 *
+	 * TODO! Pass the magic as configurable paramiter from the Makefile
+	 */
+
+	frame->data[0] = 0x5F;
+	frame->data[1] = 0x49;
+	frame->data[2] = 0x48;
+	frame->data[3] = 0x42;
+	frame->data[4] = 0x05;
+	frame->data[5] = 0xF5;
+	frame->data[6] = 0x56;
+	frame->data[7] = 0x5F;
 
 	r = conn_can_raw_create(&conn, NULL, 0, d->id, 0);
 	if (r < 0) {
-		printf("[E] _notify_node: error creating the CAN connection socket: %d", r);
+		printf("[E] _notify_node: error creating the CAN socket: %d\n", r);
 		return NULL;
 	}
 
 	do {
-		r = conn_can_raw_send(&conn, &frame, 0);
+		r = conn_can_raw_send(&conn, frame, 0);
 
 		if (r < 0) {
-			printf("[E] _notify_node: error sending the CAN frame: %d", r);
+			printf("[E] _notify_node: error sending the CAN frame: %d\n", r);
+			d->status_notify_node = false;
 			goto sock_close;
 		}
 
-		/* Notify the frame MAGIC each 1000ms */
+		/*
+		 * Notify the frame MAGIC each 1000ms
+		 *
+		 * TODO! Use a random delay istead of the same delay for all
+		 * nodes.
+		 */
 		xtimer_usleep(WAIT_1000ms);
 
 	} while (r == 0 && d->status_notify_node);
@@ -139,7 +150,9 @@ static void *_thread_notify_node(void *device)
 sock_close:
 	r = conn_can_raw_close(&conn);
 	if (r < 0)
-		printf("[E] _notify_node: error closing the CAN connection socket: %d", r);
+		printf("[E] _notify_node: error closing the CAN socket: %d\n", r);
+
+	free(frame);
 
 	puts("_notify_node has been termined");
 	return NULL;
@@ -153,10 +166,12 @@ int _ihb_can_handler(int argc, char **argv)
 		_usage();
 		return 1;
 	} else if (strncmp(argv[1], "list", 5) == 0) {
-		printf("ihb dev=%d name=%s mcu_id=%s, frame_id=%d\n", p->id,
-							   p->name,
-							   p->controller_uid,
-							   p->frame_id);
+		printf("ihb dev=%d name=%s mcu_id=%s, frame_id=%d notify=%s\n",
+			p->id,
+			p->name,
+			p->controller_uid,
+			p->frame_id,
+			p->status_notify_node ? "true" : "false");
 	} else if (strncmp(argv[1], "canON", 6) == 0) {
 		return _power_up(p->id);
 	} else if (strncmp(argv[1], "canOFF", 7) == 0) {
