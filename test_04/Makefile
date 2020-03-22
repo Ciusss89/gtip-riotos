@@ -24,11 +24,8 @@ USEMODULE += shell_commands
 USEMODULE += ps
 
 USEMODULE += conn_can
-USEMODULE += can_isotp
-USEMODULE += conn_can_isotp_multi
 USEMODULE += auto_init_can
 USEMODULE += can_pm
-#SEMODULE += can_trx
 
 FEATURES_REQUIRED += periph_can
 FEATURES_REQUIRED += periph_gpio_irq

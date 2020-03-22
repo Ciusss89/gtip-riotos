@@ -34,6 +34,7 @@ static struct ihb_node *find_canID(int can_id) {
 
 int ihb_setup(int s, uint8_t c_id_master, bool v)
 {
+	const uint8_t MASTER = 8, IDLE = 4;
 	struct canfd_frame frame;
 	struct ihb_node *ihb;
 
@@ -43,17 +44,13 @@ int ihb_setup(int s, uint8_t c_id_master, bool v)
 	for(ihb = ihbs; ihb != NULL; ihb = (struct ihb_node *)(ihb->hh.next)) {
 		fprintf(stdout, "configuring IHB node=%02x\n", ihb->canID);
 
+		r = asprintf(&cmd, "%03x#R", ihb->canID);
+		if (r < 0) {
+			fprintf(stderr, "ihb_setup: asprintf fails");
+			break;
+		}
+
 		if(ihb->canID == c_id_master & !ihb->expired) {
-			/* Set IHB as master  */
-			if(v)
-				fprintf(stdout, "\t configuring as MASTER\n");
-
-			r = asprintf(&cmd, "%03x#FFFF", ihb->canID);
-			if (r < 0) {
-				fprintf(stderr, "ihb_setup: asprintf fails");
-				break;
-			}
-
 			/*
 			 * Parse CAN frame
 			 *
@@ -61,6 +58,7 @@ int ihb_setup(int s, uint8_t c_id_master, bool v)
 			 * into struct canfd_frame
 			 */
 			required_mtu = parse_canframe(cmd, &frame);
+			frame.len = MASTER;
 
 			/* send frame */
 			if (write(s, &frame, required_mtu) != required_mtu) {
@@ -71,20 +69,15 @@ int ihb_setup(int s, uint8_t c_id_master, bool v)
 			ihb->best = true;
 
 			free(cmd);
-
 		} else {
-			/* Set IHBs to idle mode */
-			if(v)
-				fprintf(stdout, "\t configuring in IDLE \n");
-
-			r = asprintf(&cmd, "%03x#2222",ihb->canID);
-			if (r < 0) {
-				fprintf(stderr, "ihb_setup: asprintf fails");
-				break;
-			}
-
-			/* parse CAN frame */
+			/*
+			 * Parse CAN frame
+			 *
+			 * Transfers a valid ASCII string describing a CAN frame
+			 * into struct canfd_frame
+			 */
 			required_mtu = parse_canframe(cmd, &frame);
+			frame.len = IDLE;
 
 			/* send frame */
 			if (write(s, &frame, required_mtu) != required_mtu) {
@@ -93,6 +86,8 @@ int ihb_setup(int s, uint8_t c_id_master, bool v)
 			}
 
 			ihb->best = false;
+
+			free(cmd);
 		}
 	}
 

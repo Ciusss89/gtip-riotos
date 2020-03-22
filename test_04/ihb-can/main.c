@@ -24,7 +24,7 @@
 #include "can/conn/isotp.h"
 #include "can/device.h"
 
-#define ENABLE_DEBUG    (0)
+#define ENABLE_DEBUG    (1)
 #include "debug.h"
 
 #include "ihbcan.h"
@@ -97,15 +97,17 @@ static uint8_t _power_down(uint8_t ifnum)
 static void *_thread_notify_node(void *device)
 {
 
+	struct can_frame *snd_frame = xmalloc(sizeof(struct can_frame));
+	struct can_frame *rcv_frame = xmalloc(sizeof(struct can_frame));
+	struct can_filter *filter = xmalloc(sizeof(struct can_filter));
 	struct ihb_can_perph *d = (struct ihb_can_perph *)device;
-	struct can_frame *frame = xmalloc(sizeof(struct can_frame));
 	conn_can_raw_t conn;
 	int r;
 
 	d->status_notify_node = true;
 
-	frame->can_id = d->frame_id;
-	frame->can_dlc = 8;
+	snd_frame->can_id = d->frame_id;
+	snd_frame->can_dlc = 8;
 
 	/*
 	 * Send IHB's asci magic string "_IHB_V.3_"
@@ -113,14 +115,14 @@ static void *_thread_notify_node(void *device)
 	 * TODO! Pass the magic as configurable paramiter from the Makefile
 	 */
 
-	frame->data[0] = 0x5F;
-	frame->data[1] = 0x49;
-	frame->data[2] = 0x48;
-	frame->data[3] = 0x42;
-	frame->data[4] = 0x05;
-	frame->data[5] = 0xF5;
-	frame->data[6] = 0x56;
-	frame->data[7] = 0x5F;
+	snd_frame->data[0] = 0x5F;
+	snd_frame->data[1] = 0x49;
+	snd_frame->data[2] = 0x48;
+	snd_frame->data[3] = 0x42;
+	snd_frame->data[4] = 0x05;
+	snd_frame->data[5] = 0xF5;
+	snd_frame->data[6] = 0x56;
+	snd_frame->data[7] = 0x5F;
 
 	r = conn_can_raw_create(&conn, NULL, 0, d->id, 0);
 	if (r < 0) {
@@ -128,33 +130,56 @@ static void *_thread_notify_node(void *device)
 		return NULL;
 	}
 
-	do {
-		r = conn_can_raw_send(&conn, frame, 0);
+	filter->can_id = 0; /* fix me*/
+	filter->can_mask = CAN_SFF_MASK | CAN_RTR_FLAG;
 
+	do {
+		r = conn_can_raw_set_filter(&conn, NULL, 0);
+		if (r < 0) {
+			printf("[E] _notify_node: error clearing filter = %d", r);
+			d->status_notify_node = false;
+			goto sock_close;
+		}
+
+		r = conn_can_raw_send(&conn, snd_frame, 0);
 		if (r < 0) {
 			printf("[E] _notify_node: error sending the CAN frame: %d\n", r);
 			d->status_notify_node = false;
 			goto sock_close;
 		}
 
-		/*
-		 * Notify the frame MAGIC each 1000ms
-		 *
-		 * TODO! Use a random delay istead of the same delay for all
-		 * nodes.
-		 */
-		xtimer_usleep(WAIT_1000ms);
+		r = conn_can_raw_set_filter(&conn, filter, 1);
+		if (r < 0) {
+			printf("[E] _notify_node: error setting filter = %d", r);
+			d->status_notify_node = false;
+			goto sock_close;
+		}
 
-	} while (r == 0 && d->status_notify_node);
+		while (((r = conn_can_raw_recv(&conn, rcv_frame, RCV_TIMEOUT))
+			 == sizeof(struct can_frame))) {
+
+			if(ENABLE_DEBUG) {
+				printf("ihbcan: ID=%02lx  DLC=[%x] ",
+						rcv_frame->can_id,
+						rcv_frame->can_dlc);
+
+				for (int i = 0; i < rcv_frame->can_dlc; i++)
+					printf(" %02X", rcv_frame->data[i]);
+        			puts("");
+			}
+		}
+
+	} while ( d->status_notify_node);
 
 sock_close:
 	r = conn_can_raw_close(&conn);
 	if (r < 0)
 		printf("[E] _notify_node: error closing the CAN socket: %d\n", r);
 
-	free(frame);
+	free(snd_frame);
+	free(rcv_frame);
 
-	puts("_notify_node has been termined");
+	puts("has been termined");
 	return NULL;
 }
 

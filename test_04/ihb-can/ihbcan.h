@@ -10,6 +10,7 @@
 #define IHB_THREAD_HELP "ihb - can submodule, development branch"
 
 #define WAIT_1000ms	(1000LU * US_PER_MS)	/* delay of 1 s */
+#define RCV_TIMEOUT	(2000 * US_PER_MS)	/* socket rcv timeout */
 
 /*
  * MCU can have one or more CAN controllers, by default I use the
