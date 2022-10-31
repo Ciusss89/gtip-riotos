@@ -1,19 +1,23 @@
 ## Networking setup
 #
 
-LWIP_IPV4 ?= 1
-LWIP_IPV6 ?= 0
-USEMODULE += ipv4_addr
-USEMODULE += lwip_arp
-USEMODULE += lwip_ipv4
-USEMODULE += lwip_dhcp_auto
-CFLAGS += -DETHARP_SUPPORT_STATIC_ENTRIES=1
-
-USEMODULE += lwip lwip_sock_ip lwip_netdev
-USEMODULE += lwip_udp
-USEMODULE += lwip_tcp
-USEMODULE += od
 USEMODULE += netdev_default
 
-USEMODULE += lwip_ethernet
+# LWIP Core:
+USEMODULE += lwip lwip_netdev lwip_ethernet lwip_stats
 
+LWIP_IPV4 ?= 1
+ifneq (0, $(LWIP_IPV4))
+  USEMODULE += ipv4_addr
+  USEMODULE += lwip_arp
+  USEMODULE += lwip_ipv4
+  CFLAGS += -DETHARP_SUPPORT_STATIC_ENTRIES=1
+  LWIP_IPV6 ?= 0
+else
+  LWIP_IPV6 ?= 1
+  USEMODULE += ipv6_addr
+  USEMODULE += lwip_ipv6_autoconfig
+  USEMODULE += lwip_tcp lwip_sock_tcp
+endif
+
+USEMODULE += lwip_tcp lwip_udp lwip_dhcp_auto
